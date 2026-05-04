@@ -1,3 +1,10 @@
+Metadata-Version: 2.1
+Name: app-photo-streamlit
+Version: 0.1.0
+Summary: App para upload de fotos
+Requires-Python: ==3.11.*
+Description-Content-Type: text/markdown
+
 # Case Seleção
 
 ## Software Engineer Python - AWS

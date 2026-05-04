@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+requirements.txt
+src/main.py
+src/app_photo_streamlit.egg-info/PKG-INFO
+src/app_photo_streamlit.egg-info/SOURCES.txt
+src/app_photo_streamlit.egg-info/dependency_links.txt
+src/app_photo_streamlit.egg-info/requires.txt
+src/app_photo_streamlit.egg-info/top_level.txt
