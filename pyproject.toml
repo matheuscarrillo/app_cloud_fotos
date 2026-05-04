@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools==68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "app-photo-streamlit" 
+description = "App para upload de fotos"
+readme = "README.md"
+requires-python = "==3.11.*"
+dynamic = ["dependencies"]
+version = "0.1.0"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}

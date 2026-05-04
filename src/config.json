@@ -1,0 +1,6 @@
+{
+  "usuarios": {
+    "admin": {"password":"senha123", "s3_bucket": "123687089814-foto-cloud-login"},
+    "matheus": {"password":"senha123", "s3_bucket": "123687089814-foto-cloud-login"}
+  }
+}
