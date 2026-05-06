@@ -21,7 +21,7 @@ def salvar_config(config):
         json.dump(config, f)
 
 # CONFIG
-BUCKET_NAME = '123687089814-fotos-iphone'
+BUCKET_NAME = '123687089814-casamento-m-a-2026'
 REGION = 'sa-east-1'
 CONFIG_PATH = "src/eventos/config.json"
 
@@ -323,7 +323,7 @@ with aba[2]:
 
         if st.button("Entrar"):
 
-            if usuario == "admin" and senha == "mathapp123":
+            if usuario == "admin" and senha == "casamento@amanda1234":
                 st.session_state.logado = True
                 st.success("Login realizado com sucesso!")
                 st.rerun()  # 🔥 atualiza a tela
