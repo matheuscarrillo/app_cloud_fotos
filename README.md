@@ -1,168 +1,251 @@
-# Case Seleção
+# 🚀 Deploy do Streamlit na AWS EC2 com Python 3.11
 
-## Software Engineer Python - AWS
+Este guia mostra como configurar uma instância EC2 e rodar sua aplicação Streamlit usando **Python 3.11**, garantindo compatibilidade e estabilidade.
 
-### Tarefas
+---
 
-1. Criar um repositório no Github que deve conter todos com os códigos do case;
-2. Criar o código que sobe uma API usando IaC (com Terraform, por exemplo), preferencialmente usando o serviço API Gateway da Cloud AWS:
-   - O contrato deve ser especificado usando o OpenAPI 3.0 (Swagger)
-   - Deve expor um endpoint com um recurso */sobreviventes* que recebe um JSON com um array de características necessárias para escorar o modelo de Machine Learning treinado em cima do Dataset do Titanic. O modelo é disponibilizado neste repositório na seguinte *path*: */modelo/model.pkl*;
-   - O método POST deve receber um JSON no body com um array de características e retornar um JSON com a probabilidade de sobrevivência do passageiro, junto com o ID do passageiro;
-     - O processamento - escoragem - deve ser feita numa função Lambda **com código escrito em Python**, e caso seja escolhido outro serviço AWS, justificar a escolha;
-     - Além disso, a probabilidade de sobrevivência pode ser armazenada em um banco de dados de baixa latência e serverless - DynamoDB;
-     - O Banco de Dados e a função Lambda devem ser criados usando IaC com Terraform, por exemplo;
-     - **Não provisionar o banco DynamoDB, dado o baixo volume de requisições que serão feitas;**
-   - O método GET /sobreviventes deve retornar um JSON com a lista de passageiros que já foram avaliados (fica a critério do candidato implementar paginação ou não);
-   - O método GET /sobreviventes/{id} deve retornar um JSON com a probabilidade de sobrevivência do passageiro com o ID informado;
-   - O método DELETE deve deletar o passageiro com o ID informado;
-3. Disponibilizar os arquivos de IaC (Terraform) no repositório, assim como o contrato OpenAPI e o código da função Lambda;
-4. Você possui o prazo de 7 dias corridos para entrega do case, uma vez recebido o link para este repositório;
+## 🧠 Visão Geral
 
-# Projeto Desenvolvido
+Você irá:
 
-## Introdução
-O objetivo do projeto é construir um sistema que tenha disponível 4 rotas, sendo uma POST de chamada de um modelo de Machine Learning, onde a partir de um payload, recebo a probabilidade e o id do passageiro. Outras 2 rotas de consumo do DynamoDB, uma para listagem de passageiros e outra para pesquisa de um único passageiro. E por fim, teremos uma rota para deletar passageiros através do ID.
+1. Criar uma instância EC2  
+2. Instalar Python 3.11 (via pyenv)  
+3. Clonar o repositório  
+4. Criar ambiente virtual  
+5. Instalar dependências  
+6. Rodar o Streamlit  
 
-O projeto é seguido pela seguinte arquitetura:
-![Imagem](./images/diagrama_projeto_.jpg)
+⏱️ Tempo estimado: ~20 minutos
 
-## 1. Configuração do ambiente usando o .toml
-Construção da ENV:
-  ```bash
-    python venv .env_modelo
-  ```
-  ```bash
-    .env_modelo\Scripts\activate
-  ```
-Instalação do .toml:
-  ```bash
-    pip install -e .
-  ```
-## 2. Construção do pipeline do modelo
-Para construção da pipeline, é necessário o .pkl do modelo treinado e as etapas de tratamento do dado.
-O script [Gerador de Artefatos](./src/model/generate_artfacts.py) gera a pipeline do modelo para consumo da lambda.
+---
 
-## 3. Construção do código python para execução em lambda 
-É necessário criar um script para consumo do modelo e dos dados no Dynamo. Para isso, o script [Lambda Handler](./src/app.py), foi criado com o intuíto de fazer essas ações. Para teste da funcionalidade, pode ser utilizado os seguintes payloads no Lambda [Exemplos Json](./src/config/event.json).
+## ✅ 1. Criar Instância EC2
 
-## 4. Criação de imagem docker
-Para criação do Container, estou utilizando o Docker. Ele será o responsável por empacotar o projeto, utilizando o arquivo [PyProject](pyproject.toml) como base de versionamento do Python e libs. O código de configuração do container está disponível aqui [DockerFile](./Dockerfile).
+- Acesse o console da AWS → EC2 → Launch Instance
 
+### 🔧 Configurações recomendadas:
 
-Script de criação da imagem:
-  ```bash
-    docker buildx build --platform linux/amd64 -t ml-lambda --load .
-  ```
-Teste da imagem:
-  ```bash
-    # Executa a imagem
-    docker run -p 9000:8080 ml-lambda
-    
-    # Teste da imagem em outro terminal (deixe apenas o payload que irá usar no event.json).
-    curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations/sobreviventes" -d @event.json
-  ```
+| Campo           | Valor                  |
+|----------------|-----------------------|
+| Nome           | streamlit-app         |
+| AMI            | Ubuntu 22.04 LTS      |
+| Tipo           | t3.small              |
+| Região         | sa-east-1 (São Paulo) |
 
-![Imagem](./images/Docker_Image_.png)
+---
 
-## 5. Construção do Terraform de subida de lambda no ECR
-Um dos requisito é que todos as implementações sejam em IaC. Escolhi o método via terraform.
+### 🔑 Key Pair
+- Crie uma nova chave (.pem)
+- Faça o download e guarde com segurança
 
-A construção dos terraform foram realizadas de forma apartadas, cada uma está separada em uma pasta:
-- [ECR](./src/terraform/ecr/)
-- [LAMBDA](./src/terraform/lambda/)
-- [DYNAMO](./src/terraform/dynamo/)
-- [API GATEWAY](./src/terraform/api_gateway/)
+---
 
-Para criação da imagem, basta executar os comandos abaixo, a partir da raiz do projeto:
-  ```bash
-    cd src/terraform/ecr
-    terraform init
-    terraform apply
-  ```
+### 🌐 Security Group
 
-Subida de imagem no ECR:
-  - atualizar o aws configure
-Executar o comando para login no ECR:
-  ```bash
-    aws ecr get-login-password --region sa-east-1 | docker login --username AWS --password-stdin 123687089814.dkr.ecr.sa-east-1.amazonaws.com
-  ```
-Executar a implementação no docker:
+Adicione as seguintes regras:
+
+| Tipo        | Porta |
+|-------------|-------|
+| SSH         | 22    |
+| Custom TCP  | 8501  |
+
+---
+
+## ✅ 2. Conectar na EC2
+
 ```bash
-  # Atualize a versao da imagem
-  docker tag ml-lambda:latest 123687089814.dkr.ecr.sa-east-1.amazonaws.com/ml-lambda:{versao}
+chmod 400 sua-chave.pem
 
-  # Esse comando irá subir o script no ECR
-  docker push 123687089814.dkr.ecr.sa-east-1.amazonaws.com/ml-lambda:{versao}
-```
-![Imagem](./images/Ecr_.png)
-
-## 6. Subida do lambda via terraform
-Criação da lambda:
-  ```bash
-    cd src/terraform/lambda
-    terraform init
-    terraform apply
-  ```
-Atualização da imagem (caso seja a partir do segundo commit):
-  - altere a versão no arquivo [Variáveis Lambda](./src/terraform/lambda/variables.tf).
-  - Execute os comandos abaixo:
-    ```bash
-      cd src/terraform/lambda
-      terraform init
-      terraform apply -target=aws_lambda_function.lambda
-    ```
-
-![Imagem](./images/LambdaHandler.png)
-
-## 7. Construção do Terraform de subida de Dynamo.
-O Dynamo, será o responsável por armazenar os resultados gerados pelo método POST da lambda.
-- Execute os comandos abaixo:
-  ```bash
-    cd src/terraform/dynamo
-    terraform init
-    terraform apply
-  ```
-
-![Imagem](./images/DynamoDB.png)
-
-## 8. Construção da API e API GateWay
-- OpenAPI 3.0 (Swagger)
-  - É um documento que explica exatamente como a API funciona. Define tipagem, rotas e padrões de saída.
-  - [OpenApi.yaml](./src/terraform/api_gateway/openapi.yaml)
-
-![Imagem](./images/API_GW.png)
-
-### 8.1 Construção do Terraform de subida de API GateWay
-O API GateWay será responsável por fazer as chamadas do lambda de forma externa. Essa API pode ser consumida por outros sistemas.
-
-- Via Terraform será construída a API GateWay:
-  ```bash
-    cd src/terraform/api_gateway
-    terraform init
-    terraform apply 
-  ```
-
-Rotas para chamada da API:
-```bash
-  - curl -X POST "https://2ycz4yvc4h.execute-api.sa-east-1.amazonaws.com/dev/sobreviventes" -d @teste.json
-  - curl -X GET "https://2ycz4yvc4h.execute-api.sa-east-1.amazonaws.com/dev/sobreviventes"
-  - curl -X GET "https://2ycz4yvc4h.execute-api.sa-east-1.amazonaws.com/dev/sobreviventes/123"
-  - curl -X DELETE "https://2ycz4yvc4h.execute-api.sa-east-1.amazonaws.com/dev/sobreviventes/123"
+ssh -i sua-chave.pem ubuntu@SEU_IP_PUBLICO
 ```
 
-![Imagem](./images/Response.png)
+---
 
-## 9. Teste de latência
+## ✅ 3. Instalar dependências do sistema
 
-### 9.1 Chamadas Únicas
-<img src="./images/latency_distribution_onerequest.png" width="700"/>
+```bash
+sudo apt update
 
-Realizei um teste de latência com 100 chamadas em série, com a finalidade de avaliar a performance da API. Para essas, foi medido o P90 e o P99. A imagem demonstra a latência para as requisições.
+sudo apt install -y make build-essential libssl-dev zlib1g-dev \
+libbz2-dev libreadline-dev libsqlite3-dev curl libncursesw5-dev \
+xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
+```
 
-### 9.2 Chamadas Enfileiradas
-![Imagem](./images/latency_parallel.png)
+---
 
-O teste de latência foi realizado para a chamada POST (modelo), utilizando a função ThreadPoolExecutor. Basicamente ela enfileira X requisições (no caso setei em 10k) com X requisições em concorrência (setei 200). Ao finalizar as primeiras, executa as próximas.
+## ✅ 4. Instalar pyenv
 
-O grafico de latência indica que, 99% das requisições tiveram latência de até 6 segundos. Dependendo para o que será utilizado, pode ser necessário uma mudança na infraestrutura para melhoria de latência.
+```bash
+curl https://pyenv.run | bash
+```
+
+---
+
+## ✅ 5. Configurar pyenv
+
+```bash
+echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
+echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
+echo 'eval "$(pyenv init --path)"' >> ~/.bashrc
+
+source ~/.bashrc
+```
+
+---
+
+## ✅ 6. Instalar Python 3.11
+
+```bash
+pyenv install 3.11.9
+pyenv global 3.11.9
+```
+
+---
+
+## ✅ 7. Clonar o repositório
+
+```bash
+sudo apt install git -y
+
+git clone https://github.com/SEU_USUARIO/SEU_REPOSITORIO.git
+cd SEU_REPOSITORIO
+```
+
+---
+
+## ✅ 8. Criar ambiente virtual
+
+```bash
+python -m venv venv
+source venv/bin/activate
+```
+
+---
+
+## ✅ 9. Instalar dependências
+
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+---
+
+## ✅ 10. Rodar a aplicação
+
+```bash
+streamlit run main.py --server.port 8501 --server.address 0.0.0.0
+```
+
+---
+
+## 🌐 11. Acessar no navegador
+
+```
+http://SEU_IP_PUBLICO:8501
+```
+
+---
+
+## 🔥 12. Manter o app rodando (IMPORTANTE)
+
+### Opção 1 — Simples (recomendado)
+
+```bash
+nohup streamlit run main.py --server.port 8501 --server.address 0.0.0.0 > log.out 2>&1 &
+```
+
+👉 O app continua rodando mesmo após fechar o terminal
+
+---
+
+### Opção 2 — Melhor (usando screen)
+
+```bash
+sudo apt install screen -y
+screen
+```
+
+Dentro do screen, rode:
+
+```bash
+streamlit run main.py --server.port 8501 --server.address 0.0.0.0
+```
+
+Para sair sem parar o app:
+
+```
+Ctrl + A + D
+```
+
+Para voltar:
+
+```bash
+screen -r
+```
+
+---
+
+## ⚙️ 13. (Opcional) Executar automaticamente no boot
+
+```bash
+sudo nano /etc/systemd/system/streamlit.service
+```
+
+Conteúdo:
+
+```ini
+[Unit]
+Description=Streamlit App
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/SEU_REPOSITORIO
+ExecStart=/home/ubuntu/SEU_REPOSITORIO/venv/bin/streamlit run main.py --server.port 8501 --server.address 0.0.0.0
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Ativar:
+
+```bash
+sudo systemctl daemon-reexec
+sudo systemctl enable streamlit
+sudo systemctl start streamlit
+```
+
+---
+
+## 💰 Custo estimado
+
+- t3.small → ~R$ 20–30 por semana  
+
+---
+
+## ⚠️ Boas práticas
+
+- Não salvar credenciais AWS no código  
+- Usar IAM Role na EC2  
+- Não depender de arquivos locais para config  
+- Usar S3 para persistência  
+
+---
+
+## 🎯 Resultado final
+
+- Python 3.11 instalado  
+- Ambiente isolado  
+- Streamlit rodando publicamente  
+- App persistente (não para ao fechar terminal)  
+
+---
+
+## 🚀 Próximos passos (opcional)
+
+- Configurar domínio (ex: fotos.com)  
+- Adicionar HTTPS (Let's Encrypt)  
+- Implementar upload direto para S3  
+- Escalar para múltiplos usuários  

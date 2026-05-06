@@ -7,6 +7,7 @@ import random
 import time
 import json
 import base64
+import requests
 
 def carregar_config():
     try:
@@ -21,7 +22,7 @@ def salvar_config(config):
         json.dump(config, f)
 
 # CONFIG
-BUCKET_NAME = '123687089814-fotos-iphone'
+BUCKET_NAME = '123687089814-casamento-m-a-2026'
 REGION = 'sa-east-1'
 CONFIG_PATH = "src/eventos/config.json"
 
@@ -131,41 +132,52 @@ with aba[0]:
     if "reset_form" not in st.session_state:
         st.session_state.reset_form = False
 
-    # -------- RESET SE NECESSÁRIO --------
+    # -------- RESET --------
     if st.session_state.reset_form:
         st.session_state["nome_input"] = ""
         st.session_state["momento_input"] = ""
         st.session_state.reset_form = False
 
     # -------- UI --------
-    
+
     if st.session_state.sucesso_upload:
         st.success("Upload concluído com sucesso! 🚀")
 
+    # -------- CONFIG --------
 
+    config = carregar_config()
+    bloquear_upload = config.get("bloquear_upload")
 
-    # -------- ENVIO --------
-    bloquear_upload = carregar_config()
-    bloquear_upload = bloquear_upload.get("bloquear_upload")
     if bloquear_upload:
+
         st.warning("🚫 Envio de fotos está bloqueado pelo administrador")
+
     else:
+
         nome_pessoa = st.text_input("Seu nome", key="nome_input")
         momento = st.text_input("Momento", key="momento_input")
 
         uploaded_files = st.file_uploader(
             "Selecione suas fotos",
-            type=["png", "jpg", "jpeg", "mp4", "HEVC", "H.265", "mov"],
+            type=["png", "jpg", "jpeg", "mp4", "mov"],
             accept_multiple_files=True,
-            key=f"upload_input_{st.session_state.upload_key}"  # 🔥 chave dinâmica
+            key=f"upload_input_{st.session_state.upload_key}"
         )
+
+        # -------- BOTÃO --------
+
         if st.button("🚀 Enviar imagens"):
 
             if not nome_pessoa or not momento:
+
                 st.warning("Digite seu nome e momento")
+
             elif not uploaded_files:
+
                 st.warning("Selecione imagens")
+
             else:
+
                 nome_limpo = limpar_nome(nome_pessoa)
                 momento_limpo = limpar_nome(momento)
 
@@ -178,36 +190,55 @@ with aba[0]:
 
                     for i, file in enumerate(uploaded_files):
 
-                        ext = os.path.splitext(file.name)[1]
-                        file_name = f"{nome_limpo}_{momento_limpo}_{uuid.uuid4()}{ext}"
+                        try:
 
-                        sucesso = False
-                        tentativas = 0
+                            ext = os.path.splitext(file.name)[1]
 
-                        while not sucesso and tentativas < 3:
-                            try:
-                                s3.upload_fileobj(
-                                    file,
-                                    BUCKET_NAME,
-                                    file_name,
-                                    ExtraArgs={"ContentType": file.type}
-                                )
-                                sucesso = True
-                            except:
-                                tentativas += 1
-                                time.sleep(1)
+                            file_name = f"{nome_limpo}_{momento_limpo}_{uuid.uuid4()}{ext}"
 
-                        if sucesso:
-                            status_text.text(f"✔ {file.name}")
-                        else:
-                            st.error(f"Erro ao enviar {file.name}")
+                            # 🔥 GERA URL TEMPORÁRIA
+                            presigned_post = s3.generate_presigned_post(
+                                Bucket=BUCKET_NAME,
+                                Key=file_name,
+                                Fields={
+                                    "Content-Type": file.type
+                                },
+                                Conditions=[
+                                    {"Content-Type": file.type}
+                                ],
+                                ExpiresIn=3600
+                            )
+
+                            # 🔥 UPLOAD DIRETO PARA O S3
+                            files = {
+                                "file": (file.name, file, file.type)
+                            }
+
+                            response = requests.post(
+                                presigned_post["url"],
+                                data=presigned_post["fields"],
+                                files=files
+                            )
+
+                            if response.status_code == 204:
+
+                                status_text.text(f"✔ {file.name}")
+
+                            else:
+
+                                st.error(f"Erro ao enviar {file.name}")
+
+                        except Exception as e:
+
+                            st.error(f"Erro no upload: {e}")
 
                         progress_bar.progress((i + 1) / total)
 
-                # -------- RESET CORRETO --------
+                # -------- RESET --------
+
                 st.session_state.sucesso_upload = True
                 st.session_state.reset_form = True
-                st.session_state.upload_key += 1  # 🔥 recria uploader
+                st.session_state.upload_key += 1
 
                 st.rerun()
 
